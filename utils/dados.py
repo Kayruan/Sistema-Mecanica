@@ -2,6 +2,23 @@ import streamlit as st
 from database import supabase
 import pandas as pd
 
+OPCOES_STATUS_ORCAMENTO = ["Pendente", "Aprovado", "Cancelado", "Finalizado"]
+COR_STATUS_ORCAMENTO = {
+    "Pendente": "orange",
+    "Aprovado": "blue",
+    "Cancelado": "gray",
+    "Finalizado": "green",
+}
+
+OPCOES_STATUS_PAGAMENTO = ["Pendente", "Parcial", "Pago"]
+COR_STATUS_PAGAMENTO = {"Pendente": "red", "Parcial": "orange", "Pago": "green"}
+OPCOES_FORMA_PAGAMENTO = ["Dinheiro", "Pix", "Cartão", "Boleto"]
+
+OPCOES_STATUS_OS = ["Em Andamento", "Finalizada"]
+COR_STATUS_OS = {"Em Andamento": "blue", "Finalizada": "green"}
+
+OPCOES_PAPEL_USUARIO = ["Funcionario", "Gerente"]
+
 
 @st.cache_data(ttl=5)
 def buscar_clientes(colunas="*"):
@@ -36,6 +53,18 @@ def buscar_catalogo_servicos():
 @st.cache_data(ttl=5)
 def buscar_estoque_pecas():
     resp = supabase.table("estoque_pecas").select("*").order("nome").execute()
+    return pd.DataFrame(resp.data) if resp.data else pd.DataFrame()
+
+
+@st.cache_data(ttl=5)
+def buscar_usuarios():
+    resp = supabase.table("usuarios").select("id, nome, usuario, papel, ativo, criado_em").order("nome").execute()
+    return pd.DataFrame(resp.data) if resp.data else pd.DataFrame()
+
+
+@st.cache_data(ttl=5)
+def buscar_log_atividades():
+    resp = supabase.table("log_atividades").select("*").order("criado_em", desc=True).limit(1000).execute()
     return pd.DataFrame(resp.data) if resp.data else pd.DataFrame()
 
 

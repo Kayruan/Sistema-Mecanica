@@ -29,13 +29,55 @@ def formata_moeda(valor):
     except:
         return "0,00"
 
-def _pagina_dossie_servico(pdf, s, dados_veiculo, placa):
+
+def _nao_nulo(valor):
+    """True se valor existe e nao e NaN (evita 'None'/'nan' impressos no PDF)."""
+    if valor is None:
+        return False
+    if isinstance(valor, float) and valor != valor:  # NaN nunca é igual a si mesmo
+        return False
+    return True
+
+
+def _bloco_assinatura(pdf, nome_cliente, documento_cliente, numero_label, assinatura_url=None):
+    """Rodape padrao de assinatura: imagem da assinatura (se houver) em cima do risco,
+    seguido do nome do cliente, documento e numero de referencia para conferencia."""
+    largura_linha = 90
+    x_linha = 15
+    altura_imagem = 20
+    altura_bloco = 8 + (altura_imagem if assinatura_url else 0) + 2 + 15
+
+    if pdf.get_y() + altura_bloco > 280:
+        pdf.add_page()
+    pdf.ln(8)
+
+    if assinatura_url:
+        caminho_assin = processar_imagem_para_pdf(assinatura_url)
+        if caminho_assin:
+            y_img = pdf.get_y()
+            pdf.image(caminho_assin, x=x_linha, y=y_img, w=largura_linha, h=altura_imagem)
+            os.remove(caminho_assin)
+            pdf.set_y(y_img + altura_imagem)
+
+    pdf.set_draw_color(100, 100, 100)
+    pdf.line(x_linha, pdf.get_y(), x_linha + largura_linha, pdf.get_y())
+    pdf.ln(2)
+    pdf.set_font("Arial", '', 9)
+    pdf.set_x(x_linha)
+    pdf.cell(largura_linha, 5, f"Assinatura: {nome_cliente or 'N/A'}", ln=True)
+    pdf.set_x(x_linha)
+    pdf.cell(largura_linha, 5, f"CPF/CNPJ: {documento_cliente or 'N/A'}", ln=True)
+    pdf.set_x(x_linha)
+    pdf.cell(largura_linha, 5, numero_label, ln=True)
+
+
+def _pagina_dossie_servico(pdf, s, dados_veiculo, placa, emitido_por=None):
         pdf.add_page()
 
         # --- CABEÇALHO (Maior) ---
         pdf.set_fill_color(30, 41, 59)
         pdf.rect(10, 10, 190, 25, 'F') # Caixa mais alta
-        
+
         if os.path.exists("logo.png"):
             pdf.image("logo.png", x=13, y=13, w=20) # Logo ligeiramente maior
             x_texto = 35
@@ -50,7 +92,10 @@ def _pagina_dossie_servico(pdf, s, dados_veiculo, placa):
         pdf.cell(w_texto, 8, "ORDEM DE SERVICO - AUTOMECANICA", align='C', ln=True)
         pdf.set_font("Arial", 'I', 11) # Data maior
         pdf.set_xy(x_texto, 24)
-        pdf.cell(w_texto, 5, f"Data: {s.get('data_servico', '')}", align='C', ln=True)
+        texto_data = f"Data: {s.get('data_servico', '')}"
+        if emitido_por:
+            texto_data += f"   |   Emitido por: {emitido_por}"
+        pdf.cell(w_texto, 5, texto_data, align='C', ln=True)
         pdf.set_text_color(0, 0, 0)
         pdf.ln(14)
         
@@ -65,9 +110,9 @@ def _pagina_dossie_servico(pdf, s, dados_veiculo, placa):
         pdf.cell(180, 6, f"Proprietario: {dados_veiculo.get('cliente_nome', 'N/A')}   |   Tel: {dados_veiculo.get('cliente_telefone', 'N/A')}", ln=True)
         pdf.set_x(15)
         pdf.cell(180, 6, f"Ano: {dados_veiculo.get('ano', 'N/A')}   |   Chassi: {dados_veiculo.get('chassi', 'N/A')}", ln=True)
-        if s.get('orcamento_id'):
+        if _nao_nulo(s.get('orcamento_id')):
             pdf.set_x(15)
-            pdf.cell(180, 6, f"Orcamento de origem: No {s.get('orcamento_id')}", ln=True)
+            pdf.cell(180, 6, f"Orcamento de origem: No {int(s.get('orcamento_id'))}", ln=True)
         pdf.set_y(78)
         
         # --- DESCRIÇÃO ---
@@ -160,7 +205,7 @@ def _pagina_dossie_servico(pdf, s, dados_veiculo, placa):
         
         # --- FOTOS PADRONIZADAS ---
         urls_fotos = s.get('urls_fotos', '')
-        if urls_fotos:
+        if isinstance(urls_fotos, str) and urls_fotos:
             urls = [u.strip() for u in urls_fotos.split(',') if u.strip()]
             if urls:
                 pdf.ln(8)
@@ -195,27 +240,26 @@ def _pagina_dossie_servico(pdf, s, dados_veiculo, placa):
 
         # --- ASSINATURA DO CLIENTE ---
         assinatura_url = s.get('assinatura_url')
-        if assinatura_url:
-            caminho_assin = processar_imagem_para_pdf(assinatura_url)
-            if caminho_assin:
-                pdf.ln(6)
-                pdf.set_font("Arial", 'B', 11)
-                pdf.cell(0, 6, "Assinatura do Cliente:", ln=True)
-                pdf.image(caminho_assin, x=15, w=60)
-                os.remove(caminho_assin)
+        _bloco_assinatura(
+            pdf,
+            dados_veiculo.get('cliente_nome'),
+            dados_veiculo.get('cliente_documento'),
+            f"Ordem de Servico No {s.get('id', '')}",
+            assinatura_url if isinstance(assinatura_url, str) else None,
+        )
 
 
-def gerar_relatorio_servico(placa, dados_veiculo, orcamentos, servicos):
+def gerar_relatorio_servico(placa, dados_veiculo, orcamentos, servicos, emitido_por=None):
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     for s in servicos:
-        _pagina_dossie_servico(pdf, s, dados_veiculo, placa)
+        _pagina_dossie_servico(pdf, s, dados_veiculo, placa, emitido_por)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         pdf.output(tmp.name)
         return tmp.name
 
 
-def gerar_dossies_servicos_lote(lista_itens):
+def gerar_dossies_servicos_lote(lista_itens, emitido_por=None):
     """Gera um único PDF com 1 dossiê completo (com fotos e assinatura) por item.
     lista_itens: lista de dicts com chaves 'servico', 'veiculo' e opcionalmente 'cliente'."""
     pdf = FPDF()
@@ -228,13 +272,13 @@ def gerar_dossies_servicos_lote(lista_itens):
             veic['cliente_nome'] = cli.get('nome') or veic.get('cliente_nome')
             veic['cliente_telefone'] = cli.get('telefone') or veic.get('cliente_telefone')
         placa = s.get('placa_veiculo') or veic.get('placa', '')
-        _pagina_dossie_servico(pdf, s, veic, placa)
+        _pagina_dossie_servico(pdf, s, veic, placa, emitido_por)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         pdf.output(tmp.name)
         return tmp.name
 
 
-def gerar_relatorio_orcamento(lista_orcamentos):
+def gerar_relatorio_orcamento(lista_orcamentos, emitido_por=None):
     """Gera um PDF completo (1 pagina por orcamento) com dados do cliente, do veiculo,
     pecas e servicos orcados. lista_orcamentos: lista de dicts com chaves
     'orcamento', 'veiculo' e 'cliente'."""
@@ -242,9 +286,8 @@ def gerar_relatorio_orcamento(lista_orcamentos):
     pdf.set_auto_page_break(auto=True, margin=15)
 
     cores_status = {
-        "Aprovado": (22, 101, 52),
+        "Aprovado": (30, 64, 175),
         "Pendente": (180, 83, 9),
-        "Em Execução": (30, 64, 175),
         "Finalizado": (22, 101, 52),
         "Cancelado": (127, 29, 29),
     }
@@ -274,7 +317,10 @@ def gerar_relatorio_orcamento(lista_orcamentos):
         pdf.cell(w_texto, 8, f"ORCAMENTO No {orc.get('id', '')}", align='C', ln=True)
         pdf.set_font("Arial", 'I', 11)
         pdf.set_xy(x_texto, 24)
-        pdf.cell(w_texto, 5, f"Data: {orc.get('data', '')}", align='C', ln=True)
+        texto_data = f"Data: {orc.get('data', '')}"
+        if emitido_por:
+            texto_data += f"   |   Emitido por: {emitido_por}"
+        pdf.cell(w_texto, 5, texto_data, align='C', ln=True)
         pdf.set_text_color(0, 0, 0)
         pdf.ln(14)
 
@@ -397,21 +443,97 @@ def gerar_relatorio_orcamento(lista_orcamentos):
         pdf.multi_cell(0, 5, "Orcamento sujeito a alteracao apos diagnostico tecnico detalhado. Validade: 15 dias a partir da data de emissao.")
 
         assinatura_url = orc.get('assinatura_url')
-        if assinatura_url:
-            caminho_assin = processar_imagem_para_pdf(assinatura_url)
-            if caminho_assin:
-                pdf.ln(4)
-                pdf.set_font("Arial", 'B', 11)
-                pdf.cell(0, 6, "Assinatura do Cliente:", ln=True)
-                pdf.image(caminho_assin, x=15, w=60)
-                os.remove(caminho_assin)
+        _bloco_assinatura(
+            pdf,
+            cli.get('nome'),
+            cli.get('cpf_cnpj'),
+            f"Orcamento No {orc.get('id', '')}",
+            assinatura_url if isinstance(assinatura_url, str) else None,
+        )
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         pdf.output(tmp.name)
         return tmp.name
 
 
-def gerar_relatorio_macro(df_dados, cliente_filtro, placa_filtro, periodo_str, total_valor, titulo_personalizado="RELATORIO MACRO DE SERVICOS"):
+def gerar_relatorio_historico_veiculo(placa, veiculo, cliente, eventos, emitido_por=None):
+    """Gera um PDF com a linha do tempo (orcamentos + OS) de um veiculo.
+    eventos: lista de dicts {'tipo': 'orcamento'|'servico', 'data': str, 'row': dict}."""
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+
+    pdf.set_fill_color(30, 41, 59)
+    pdf.rect(10, 10, 190, 25, 'F')
+    if os.path.exists("logo.png"):
+        pdf.image("logo.png", x=13, y=13, w=20)
+        x_texto = 35
+        w_texto = 165
+    else:
+        x_texto = 10
+        w_texto = 190
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Arial", 'B', 16)
+    pdf.set_xy(x_texto, 15)
+    pdf.cell(w_texto, 8, "HISTORICO DO VEICULO", align='C', ln=True)
+    pdf.set_font("Arial", 'I', 10)
+    pdf.set_xy(x_texto, 24)
+    texto_sub = f"Placa: {placa}"
+    if emitido_por:
+        texto_sub += f"   |   Emitido por: {emitido_por}"
+    pdf.cell(w_texto, 5, texto_sub, align='C', ln=True)
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(14)
+
+    pdf.set_fill_color(241, 245, 249)
+    pdf.rect(10, pdf.get_y(), 190, 22, 'F')
+    y_info = pdf.get_y()
+    pdf.set_xy(15, y_info + 3)
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(180, 6, f"VEICULO: {str(veiculo.get('marca', '')).upper()} {str(veiculo.get('modelo', '')).upper()} ({veiculo.get('ano', 'N/A')})", ln=True)
+    pdf.set_x(15)
+    pdf.set_font("Arial", '', 11)
+    pdf.cell(180, 6, f"Chassi: {veiculo.get('chassi') or 'Nao informado'}", ln=True)
+    pdf.set_x(15)
+    nome_cli = cliente.get('nome', 'Nao vinculado') if cliente else 'Nao vinculado'
+    tel_cli = cliente.get('telefone', 'N/A') if cliente else 'N/A'
+    pdf.cell(180, 6, f"Cliente: {nome_cli}   |   Tel: {tel_cli}", ln=True)
+    pdf.set_y(y_info + 26)
+
+    pdf.set_fill_color(226, 232, 240)
+    pdf.set_font("Arial", 'B', 10)
+    pdf.cell(25, 9, "Tipo", border=1, fill=True, align='C')
+    pdf.cell(14, 9, "No", border=1, fill=True, align='C')
+    pdf.cell(24, 9, "Data", border=1, fill=True, align='C')
+    pdf.cell(30, 9, "Status", border=1, fill=True, align='C')
+    pdf.cell(65, 9, "Descricao", border=1, fill=True)
+    pdf.cell(32, 9, "Valor (R$)", border=1, fill=True, align='R')
+    pdf.ln()
+
+    pdf.set_font("Arial", '', 10)
+    for ev in eventos:
+        row = ev['row']
+        tipo_txt = "Orcamento" if ev['tipo'] == 'orcamento' else "Ordem Serv."
+        if ev['tipo'] == 'orcamento':
+            status_txt = row.get('status', 'Pendente')
+            desc = str(row.get('descricao_problema', ''))
+        else:
+            status_txt = row.get('status_pagamento') or 'Pendente'
+            desc = str(row.get('descricao_servico', ''))
+        pdf.cell(25, 8, tipo_txt, border=1)
+        pdf.cell(14, 8, str(row.get('id', '')), border=1, align='C')
+        pdf.cell(24, 8, str(ev['data']), border=1, align='C')
+        pdf.cell(30, 8, status_txt[:16], border=1, align='C')
+        pdf.cell(65, 8, f" {desc[:38]}", border=1)
+        pdf.cell(32, 8, f"{formata_moeda(row.get('valor_total', 0))} ", border=1, align='R')
+        pdf.ln()
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        pdf.output(tmp.name)
+        return tmp.name
+
+
+def gerar_relatorio_macro(df_dados, cliente_filtro, placa_filtro, periodo_str, total_valor, titulo_personalizado="RELATORIO MACRO DE SERVICOS", emitido_por=None):
     pdf = FPDF(orientation='L') 
     pdf.add_page()
     
@@ -436,6 +558,8 @@ def gerar_relatorio_macro(df_dados, cliente_filtro, placa_filtro, periodo_str, t
     pdf.set_font("Arial", 'I', 9)
     pdf.set_xy(x_texto, 20)
     info_filtros = f"Cliente: {cliente_filtro}   |   Placa: {placa_filtro}   |   Periodo: {periodo_str}"
+    if emitido_por:
+        info_filtros += f"   |   Emitido por: {emitido_por}"
     pdf.cell(w_texto, 5, info_filtros, align='C', ln=True)
     
     pdf.set_text_color(0, 0, 0)

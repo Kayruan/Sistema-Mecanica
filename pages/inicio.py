@@ -8,64 +8,58 @@ nome_empresa = config_empresa.get("nome_empresa") or "Mecânica Sanini & Aimi"
 instagram_link = config_empresa.get("instagram_link") or "https://instagram.com/mecanicasaniniaimi"
 instagram_handle = "@" + instagram_link.rstrip("/").rsplit("/", 1)[-1]
 
-st.markdown(f"# 🏢 Portal {nome_empresa}")
+st.title(f"Portal {nome_empresa}", anchor=False)
 st.write("O seu centro de comando para gestão automotiva de alta performance.")
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.space("large")
 
-# Seção Institucional
+# Seção institucional
 col_hist, col_rede = st.columns([2, 1])
 
 with col_hist:
     with st.container(border=True):
-        st.markdown("### 🏆 Nossa História & Missão")
+        st.markdown("### :material/emoji_events: Nossa história & missão")
         st.markdown("""
         A **Mecânica e Autopeças Sanini & Aimi** nasceu com o compromisso de entregar serviços de excelência, transparência e tecnologia para o seu veículo.
 
         Aliamos equipamentos modernos a uma equipe altamente capacitada para garantir a sua segurança e a performance do seu motor. Da revisão básica à retífica completa, nosso foco é a sua tranquilidade.
         """)
-        st.caption("📍 Localizada no coração da cidade - Atendimento de Seg a Sex.")
+        st.caption(":material/location_on: Localizada no coração da cidade — atendimento de segunda a sexta.")
 
 with col_rede:
     with st.container(border=True):
-        st.markdown("### 📱 Nossas Redes")
+        st.markdown("### :material/photo_camera: Nossas redes")
         st.write("Acompanhe nosso trabalho e os serviços de excelência diariamente no Instagram.")
-        st.markdown(f"""
-        <a href="{instagram_link}" target="_blank" style="text-decoration: none;">
-            <div style="background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%); padding: 10px; border-radius: 8px; color: white; text-align: center; font-weight: bold; transition: 0.3s;">
-                📸 Siga {instagram_handle}
-            </div>
-        </a>
-        """, unsafe_allow_html=True)
+        st.link_button(f"Seguir {instagram_handle}", instagram_link, icon=":material/photo_camera:", width="stretch")
 
-st.markdown("<br><br>", unsafe_allow_html=True)
+st.space("large")
 
-# Atalhos Rápidos (levam direto para a tela do módulo)
-st.markdown("### 🚀 Acesso Rápido")
+# Atalhos rápidos (levam direto para a tela do módulo)
+st.markdown("### :material/bolt: Acesso rápido")
 c1, c2, c3, c4, c5 = st.columns(5)
 
 with c1:
     with st.container(border=True):
-        st.markdown("#### 👥 Clientes")
+        st.markdown("#### :material/group: Clientes")
         st.caption("Cadastro e histórico de atendimento.")
-        st.page_link("pages/cadastros/clientes.py", label="Acessar", icon="➡️")
+        st.page_link("pages/cadastros/clientes.py", label="Acessar", icon=":material/arrow_forward:")
 with c2:
     with st.container(border=True):
-        st.markdown("#### 🚗 Veículos")
+        st.markdown("#### :material/directions_car: Veículos")
         st.caption("Controle da frota atendida.")
-        st.page_link("pages/cadastros/veiculos.py", label="Acessar", icon="➡️")
+        st.page_link("pages/cadastros/veiculos.py", label="Acessar", icon=":material/arrow_forward:")
 with c3:
     with st.container(border=True):
-        st.markdown("#### 📝 Orçamentos")
+        st.markdown("#### :material/list_alt: Orçamentos")
         st.caption("Emissão, aprovação e assinatura.")
-        st.page_link("pages/orcamentos/consultar.py", label="Acessar", icon="➡️")
+        st.page_link("pages/orcamentos/consultar.py", label="Acessar", icon=":material/arrow_forward:")
 with c4:
     with st.container(border=True):
-        st.markdown("#### 🛠️ Ordens de Serviço")
+        st.markdown("#### :material/build: Ordens de serviço")
         st.caption("Execução, fotos e dossiê técnico.")
-        st.page_link("pages/servicos/consultar.py", label="Acessar", icon="➡️")
+        st.page_link("pages/servicos/consultar.py", label="Acessar", icon=":material/arrow_forward:")
 with c5:
     with st.container(border=True):
-        st.markdown("#### 📦 Estoque")
+        st.markdown("#### :material/inventory_2: Estoque")
         st.caption("Controle de peças e reposição.")
-        st.page_link("pages/cadastros/estoque.py", label="Acessar", icon="➡️")
+        st.page_link("pages/cadastros/estoque.py", label="Acessar", icon=":material/arrow_forward:")
