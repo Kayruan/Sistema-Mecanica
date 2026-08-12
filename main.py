@@ -1,9 +1,13 @@
 import streamlit as st
 import os
 import bcrypt
+from datetime import datetime, timedelta, timezone
 from database import supabase
 from utils.dados import buscar_config_empresa
 from utils.auth import eh_gerente
+
+MAX_TENTATIVAS_LOGIN = 5
+BLOQUEIO_MINUTOS = 15
 
 if "logado" not in st.session_state:
     st.session_state.logado = False
@@ -12,8 +16,22 @@ if "logado" not in st.session_state:
 def fazer_login():
     resp = supabase.table("usuarios").select("*").eq("usuario", st.session_state.usuario).eq("ativo", True).execute()
     usuarios = resp.data
-    if usuarios and bcrypt.checkpw(st.session_state.senha.encode("utf-8"), usuarios[0]["senha_hash"].encode("utf-8")):
-        usuario_row = usuarios[0]
+    if not usuarios:
+        st.error("Credenciais inválidas. Tente novamente.")
+        return
+
+    usuario_row = usuarios[0]
+    bloqueado_ate = usuario_row.get("bloqueado_ate")
+    if bloqueado_ate:
+        expira = datetime.fromisoformat(bloqueado_ate.replace("Z", "+00:00"))
+        agora = datetime.now(timezone.utc)
+        if expira > agora:
+            minutos_restantes = max(1, int((expira - agora).total_seconds() // 60) + 1)
+            st.error(f"Conta temporariamente bloqueada por excesso de tentativas. Tente novamente em {minutos_restantes} min.")
+            return
+
+    if bcrypt.checkpw(st.session_state.senha.encode("utf-8"), usuario_row["senha_hash"].encode("utf-8")):
+        supabase.table("usuarios").update({"tentativas_falhas": 0, "bloqueado_ate": None}).eq("id", usuario_row["id"]).execute()
         st.session_state.logado = True
         st.session_state.usuario_atual = {
             "id": usuario_row["id"], "nome": usuario_row["nome"],
@@ -21,7 +39,17 @@ def fazer_login():
         }
         st.toast(f"Acesso liberado! Bem-vindo, {usuario_row['nome']}.", icon=":material/lock_open:")
     else:
-        st.error("Credenciais inválidas. Tente novamente.")
+        novas_tentativas = int(usuario_row.get("tentativas_falhas") or 0) + 1
+        dados_atualizacao = {"tentativas_falhas": novas_tentativas}
+        bloqueou_agora = novas_tentativas >= MAX_TENTATIVAS_LOGIN
+        if bloqueou_agora:
+            dados_atualizacao["bloqueado_ate"] = (datetime.now(timezone.utc) + timedelta(minutes=BLOQUEIO_MINUTOS)).isoformat()
+            dados_atualizacao["tentativas_falhas"] = 0
+        supabase.table("usuarios").update(dados_atualizacao).eq("id", usuario_row["id"]).execute()
+        if bloqueou_agora:
+            st.error(f"Muitas tentativas incorretas. Conta bloqueada por {BLOQUEIO_MINUTOS} minutos.")
+        else:
+            st.error("Credenciais inválidas. Tente novamente.")
 
 
 def fazer_logout():

@@ -7,6 +7,8 @@ import time
 
 st.set_page_config(layout="wide", page_title="Usuários | Sanini & Aimi")
 
+SENHA_MIN_LEN = 8
+
 if not eh_gerente():
     st.error("Acesso restrito a usuários com papel Gerente.", icon=":material/lock:")
     st.stop()
@@ -28,12 +30,14 @@ with aba2:
                 login = st.text_input("Login (usuário) *")
             with c2:
                 papel = st.selectbox("Papel", OPCOES_PAPEL_USUARIO)
-                senha = st.text_input("Senha *", type="password")
+                senha = st.text_input("Senha *", type="password", help=f"Mínimo de {SENHA_MIN_LEN} caracteres.")
 
             submit = st.form_submit_button("Cadastrar usuário", type="primary", width="stretch", icon=":material/person_add:")
             if submit:
                 if not nome or not login or not senha:
                     st.error("Nome, login e senha são obrigatórios.", icon=":material/error:")
+                elif len(senha) < SENHA_MIN_LEN:
+                    st.error(f"A senha deve ter pelo menos {SENHA_MIN_LEN} caracteres.", icon=":material/error:")
                 else:
                     senha_hash = bcrypt.hashpw(senha.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
                     try:
@@ -78,12 +82,14 @@ with aba1:
                             st.rerun()
 
                 with st.expander("Trocar senha"):
-                    nova_senha = st.text_input("Nova senha", type="password", key=f"npass_{row['id']}")
+                    nova_senha = st.text_input("Nova senha", type="password", key=f"npass_{row['id']}", help=f"Mínimo de {SENHA_MIN_LEN} caracteres.")
                     if st.button("Salvar nova senha", key=f"salvarpass_{row['id']}", icon=":material/save:"):
-                        if nova_senha:
+                        if not nova_senha:
+                            st.error("Digite a nova senha.", icon=":material/error:")
+                        elif len(nova_senha) < SENHA_MIN_LEN:
+                            st.error(f"A senha deve ter pelo menos {SENHA_MIN_LEN} caracteres.", icon=":material/error:")
+                        else:
                             novo_hash = bcrypt.hashpw(nova_senha.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-                            supabase.table("usuarios").update({"senha_hash": novo_hash}).eq("id", row['id']).execute()
+                            supabase.table("usuarios").update({"senha_hash": novo_hash, "tentativas_falhas": 0, "bloqueado_ate": None}).eq("id", row['id']).execute()
                             st.toast("Senha atualizada.", icon=":material/check_circle:")
                             st.rerun()
-                        else:
-                            st.error("Digite a nova senha.", icon=":material/error:")
